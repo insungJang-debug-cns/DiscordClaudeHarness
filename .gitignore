@@ -1,0 +1,5 @@
+bin/
+obj/
+
+# 실제 토큰이 들어가는 설정 파일 (git에 올리지 말 것)
+appsettings.json

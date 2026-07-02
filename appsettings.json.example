@@ -1,0 +1,18 @@
+{
+  "Discord": {
+    "BotToken": "여기에_디스코드_봇_토큰_입력",
+    "AllowedRoleIds": [ ],
+    "CommandChannelId": 0
+  },
+  "GitHub": {
+    "PersonalAccessToken": "여기에_GitHub_PAT_입력",
+    "DefaultBranch": "main"
+  },
+  "ClaudeCode": {
+    "ExecutablePath": "claude",
+    "TimeoutMinutes": 15
+  },
+  "Workspace": {
+    "RootPath": "C:\\ClaudeHarness\\repos"
+  }
+}

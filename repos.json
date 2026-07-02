@@ -1,0 +1,16 @@
+{
+  "repos": [
+    {
+      "name": "DAPLibManager",
+      "gitUrl": "https://github.com/insungJang-debug-cns/DAPLibManager.git",
+      "owner": "insungJang-debug-cns",
+      "repoName": "DAPLibManager"
+    },
+    {
+      "name": "MouseDebouncer",
+      "gitUrl": "https://github.com/insungJang-debug-cns/MouseDebouncer.git",
+      "owner": "insungJang-debug-cns",
+      "repoName": "MouseDebouncer"
+    }
+  ]
+}
