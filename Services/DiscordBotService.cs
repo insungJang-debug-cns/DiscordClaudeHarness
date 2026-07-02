@@ -19,6 +19,8 @@ public class DiscordBotService
     private readonly GitOperations _git = new();
     private readonly ClaudeCodeRunner _claude;
     private readonly GitHubPrService _github;
+    private readonly BuildRunner _build = new();
+    private readonly int _buildTimeoutMinutes;
 
     public DiscordBotService(
         string botToken,
@@ -27,7 +29,8 @@ public class DiscordBotService
         string defaultBranch,
         string claudeExecutablePath,
         int claudeTimeoutMinutes,
-        string githubToken)
+        string githubToken,
+        int buildTimeoutMinutes)
     {
         _botToken = botToken;
         _repos = repos;
@@ -35,13 +38,18 @@ public class DiscordBotService
         _defaultBranch = defaultBranch;
         _claude = new ClaudeCodeRunner(claudeExecutablePath, claudeTimeoutMinutes);
         _github = new GitHubPrService(githubToken);
+        _buildTimeoutMinutes = buildTimeoutMinutes;
 
         var config = new DiscordSocketConfig { GatewayIntents = GatewayIntents.Guilds };
         _client = new DiscordSocketClient(config);
 
         _client.Log += msg => { Console.WriteLine(msg.ToString()); return Task.CompletedTask; };
         _client.Ready += OnReadyAsync;
-        _client.SlashCommandExecuted += OnSlashCommandExecutedAsync;
+        _client.SlashCommandExecuted += command =>
+        {
+            _ = Task.Run(() => OnSlashCommandExecutedAsync(command));
+            return Task.CompletedTask;
+        };
     }
 
     public async Task StartAsync()
@@ -54,10 +62,21 @@ public class DiscordBotService
     private async Task OnReadyAsync()
     {
         // "/fix repo:my-project-1 task:로그인 버그 수정" 형태의 슬래시 커맨드 등록
+        var repoOption = new SlashCommandOptionBuilder()
+            .WithName("repo")
+            .WithDescription("repos.json에 등록된 repo 이름")
+            .WithType(ApplicationCommandOptionType.String)
+            .WithRequired(true);
+
+        foreach (var repo in _repos.Take(25))
+        {
+            repoOption.AddChoice(repo.Name, repo.Name);
+        }
+
         var fixCommand = new SlashCommandBuilder()
             .WithName("fix")
             .WithDescription("지정한 repo에서 Claude에게 작업을 시키고 PR을 생성합니다.")
-            .AddOption("repo", ApplicationCommandOptionType.String, "repos.json에 등록된 repo 이름", isRequired: true)
+            .AddOption(repoOption)
             .AddOption("task", ApplicationCommandOptionType.String, "Claude에게 시킬 작업 설명", isRequired: true);
 
         await _client.CreateGlobalApplicationCommandAsync(fixCommand.Build());
@@ -107,8 +126,9 @@ public class DiscordBotService
     {
         var localPath = Path.Combine(_workspaceRoot, repoConfig.Name);
         var branchName = $"claude/fix-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
+        var defaultBranch = repoConfig.DefaultBranch ?? _defaultBranch;
 
-        await _git.EnsureRepoUpToDateAsync(repoConfig.GitUrl, localPath, _defaultBranch);
+        await _git.EnsureRepoUpToDateAsync(repoConfig.GitUrl, localPath, defaultBranch);
         await _git.CreateBranchAsync(localPath, branchName);
 
         await _claude.RunTaskAsync(task, localPath);
@@ -118,11 +138,25 @@ public class DiscordBotService
             return new TaskResult { Success = false, Message = "Claude가 변경사항을 만들지 않았습니다. 작업 설명을 더 구체적으로 적어보세요." };
         }
 
+        if (!string.IsNullOrWhiteSpace(repoConfig.BuildCommand))
+        {
+            var (buildSuccess, buildOutput) = await _build.RunAsync(repoConfig.BuildCommand, localPath, _buildTimeoutMinutes);
+            if (!buildSuccess)
+            {
+                await _git.DiscardChangesAsync(localPath);
+                return new TaskResult
+                {
+                    Success = false,
+                    Message = $"Claude가 변경은 만들었지만 빌드에 실패해 PR을 생성하지 않았습니다.\n```\n{Truncate(buildOutput, 1200)}\n```"
+                };
+            }
+        }
+
         var diffSummary = await _git.GetDiffSummaryAsync(localPath);
         await _git.CommitAndPushAsync(localPath, branchName, $"Claude: {task}");
 
         var prUrl = await _github.CreatePullRequestAsync(
-            repoConfig.Owner, repoConfig.RepoName, branchName, _defaultBranch,
+            repoConfig.Owner, repoConfig.RepoName, branchName, defaultBranch,
             title: task,
             body: $"Discord 요청으로 자동 생성된 PR입니다.\n\n**요청 내용**: {task}\n\n```\n{diffSummary}\n```");
 
@@ -133,5 +167,11 @@ public class DiscordBotService
             PullRequestUrl = prUrl,
             DiffSummary = diffSummary
         };
+    }
+
+    private static string Truncate(string text, int maxLength)
+    {
+        text = text.Trim();
+        return text.Length <= maxLength ? text : $"...(생략)...\n{text[^maxLength..]}";
     }
 }

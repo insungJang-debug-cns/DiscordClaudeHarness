@@ -27,22 +27,32 @@ public class ClaudeCodeRunner
         var psi = new ProcessStartInfo
         {
             FileName = _executablePath,
-            // --print(-p): 비대화형으로 한 번 실행하고 결과만 받기
-            // --output-format json: 파싱하기 쉬운 JSON으로 결과 수신
-            Arguments = $"-p \"{EscapeForShell(task)}\" --output-format json",
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        // --print(-p): 비대화형으로 한 번 실행하고 결과만 받기
+        // --output-format json: 파싱하기 쉬운 JSON으로 결과 수신
+        // --dangerously-skip-permissions: 터미널이 없어 승인 프롬프트에 응답할 수 없으므로 필수
+        psi.ArgumentList.Add("-p");
+        psi.ArgumentList.Add(task);
+        psi.ArgumentList.Add("--output-format");
+        psi.ArgumentList.Add("json");
+        psi.ArgumentList.Add("--dangerously-skip-permissions");
 
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException("claude 프로세스를 시작하지 못했습니다. CLI 설치 여부를 확인하세요.");
 
         var stdOut = new StringBuilder();
+        var stdErr = new StringBuilder();
         process.OutputDataReceived += (_, e) => { if (e.Data != null) stdOut.AppendLine(e.Data); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data != null) stdErr.AppendLine(e.Data); };
         process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
 
         var timeout = TimeSpan.FromMinutes(_timeoutMinutes);
         var completed = process.WaitForExit((int)timeout.TotalMilliseconds);
@@ -53,8 +63,11 @@ public class ClaudeCodeRunner
             throw new TimeoutException($"Claude Code 실행이 {_timeoutMinutes}분을 초과해 중단되었습니다.");
         }
 
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Claude Code 실행 실패 (exit {process.ExitCode}): {stdErr}");
+        }
+
         return stdOut.ToString();
     }
-
-    private static string EscapeForShell(string input) => input.Replace("\"", "\\\"");
 }

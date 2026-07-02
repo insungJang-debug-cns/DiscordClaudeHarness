@@ -9,6 +9,8 @@ public class RepoConfig
     public string GitUrl { get; set; } = string.Empty;
     public string Owner { get; set; } = string.Empty;
     public string RepoName { get; set; } = string.Empty;
+    public string? DefaultBranch { get; set; }
+    public string? BuildCommand { get; set; }
 }
 
 public class RepoConfigRoot

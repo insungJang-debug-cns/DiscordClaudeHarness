@@ -4,13 +4,17 @@
       "name": "DAPLibManager",
       "gitUrl": "https://github.com/insungJang-debug-cns/DAPLibManager.git",
       "owner": "insungJang-debug-cns",
-      "repoName": "DAPLibManager"
+      "repoName": "DAPLibManager",
+      "defaultBranch": "master",
+      "buildCommand": "dotnet build"
     },
     {
       "name": "MouseDebouncer",
       "gitUrl": "https://github.com/insungJang-debug-cns/MouseDebouncer.git",
       "owner": "insungJang-debug-cns",
-      "repoName": "MouseDebouncer"
+      "repoName": "MouseDebouncer",
+      "defaultBranch": "main",
+      "buildCommand": "dotnet build"
     }
   ]
 }

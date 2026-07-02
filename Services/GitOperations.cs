@@ -9,18 +9,20 @@ namespace DiscordClaudeHarness.Services;
 /// </summary>
 public class GitOperations
 {
-    private async Task<(int ExitCode, string StdOut, string StdErr)> RunGitAsync(string arguments, string workingDirectory)
+    private async Task<(int ExitCode, string StdOut, string StdErr)> RunGitAsync(string workingDirectory, params string[] arguments)
     {
         var psi = new ProcessStartInfo
         {
             FileName = "git",
-            Arguments = arguments,
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        foreach (var arg in arguments) psi.ArgumentList.Add(arg);
 
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException("git 프로세스를 시작하지 못했습니다.");
@@ -45,47 +47,54 @@ public class GitOperations
         if (!Directory.Exists(Path.Combine(localPath, ".git")))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-            var (code, _, err) = await RunGitAsync($"clone \"{gitUrl}\" \"{localPath}\"", Path.GetDirectoryName(localPath)!);
+            var (code, _, err) = await RunGitAsync(Path.GetDirectoryName(localPath)!, "clone", gitUrl, localPath);
             if (code != 0) throw new InvalidOperationException($"git clone 실패: {err}");
         }
         else
         {
-            var (code, _, err) = await RunGitAsync($"checkout {defaultBranch}", localPath);
+            var (code, _, err) = await RunGitAsync(localPath, "checkout", defaultBranch);
             if (code != 0) throw new InvalidOperationException($"checkout 실패: {err}");
 
-            (code, _, err) = await RunGitAsync("pull", localPath);
+            (code, _, err) = await RunGitAsync(localPath, "pull");
             if (code != 0) throw new InvalidOperationException($"git pull 실패: {err}");
         }
     }
 
     public async Task CreateBranchAsync(string localPath, string branchName)
     {
-        var (code, _, err) = await RunGitAsync($"checkout -b {branchName}", localPath);
+        var (code, _, err) = await RunGitAsync(localPath, "checkout", "-b", branchName);
         if (code != 0) throw new InvalidOperationException($"브랜치 생성 실패: {err}");
     }
 
     /// <summary>Claude가 수정한 내용이 있는지 확인. 변경 없으면 false.</summary>
     public async Task<bool> HasChangesAsync(string localPath)
     {
-        var (_, stdOut, _) = await RunGitAsync("status --porcelain", localPath);
+        var (_, stdOut, _) = await RunGitAsync(localPath, "status", "--porcelain");
         return !string.IsNullOrWhiteSpace(stdOut);
     }
 
     public async Task<string> GetDiffSummaryAsync(string localPath)
     {
-        var (_, stdOut, _) = await RunGitAsync("diff --stat", localPath);
+        var (_, stdOut, _) = await RunGitAsync(localPath, "diff", "--stat");
         return stdOut.Trim();
+    }
+
+    /// <summary>빌드 실패 등으로 커밋하지 않을 변경사항을 되돌려서, 다음 실행이 깨끗한 상태에서 시작하도록 함.</summary>
+    public async Task DiscardChangesAsync(string localPath)
+    {
+        await RunGitAsync(localPath, "reset", "--hard");
+        await RunGitAsync(localPath, "clean", "-fd");
     }
 
     public async Task CommitAndPushAsync(string localPath, string branchName, string commitMessage)
     {
-        var (code, _, err) = await RunGitAsync("add .", localPath);
+        var (code, _, err) = await RunGitAsync(localPath, "add", ".");
         if (code != 0) throw new InvalidOperationException($"git add 실패: {err}");
 
-        (code, _, err) = await RunGitAsync($"commit -m \"{commitMessage}\"", localPath);
+        (code, _, err) = await RunGitAsync(localPath, "commit", "-m", commitMessage);
         if (code != 0) throw new InvalidOperationException($"git commit 실패: {err}");
 
-        (code, _, err) = await RunGitAsync($"push -u origin {branchName}", localPath);
+        (code, _, err) = await RunGitAsync(localPath, "push", "-u", "origin", branchName);
         if (code != 0) throw new InvalidOperationException($"git push 실패: {err}");
     }
 }

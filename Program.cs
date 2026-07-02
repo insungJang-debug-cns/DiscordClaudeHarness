@@ -20,7 +20,8 @@ var botService = new DiscordBotService(
     defaultBranch: configuration["GitHub:DefaultBranch"] ?? "main",
     claudeExecutablePath: configuration["ClaudeCode:ExecutablePath"] ?? "claude",
     claudeTimeoutMinutes: int.Parse(configuration["ClaudeCode:TimeoutMinutes"] ?? "15"),
-    githubToken: configuration["GitHub:PersonalAccessToken"]!
+    githubToken: configuration["GitHub:PersonalAccessToken"]!,
+    buildTimeoutMinutes: int.Parse(configuration["Build:TimeoutMinutes"] ?? "10")
 );
 
 Console.WriteLine("Discord-Claude Harness 시작 중...");

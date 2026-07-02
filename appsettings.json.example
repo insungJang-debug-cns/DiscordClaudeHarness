@@ -12,6 +12,9 @@
     "ExecutablePath": "claude",
     "TimeoutMinutes": 15
   },
+  "Build": {
+    "TimeoutMinutes": 10
+  },
   "Workspace": {
     "RootPath": "C:\\ClaudeHarness\\repos"
   }
